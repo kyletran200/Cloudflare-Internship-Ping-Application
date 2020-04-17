@@ -11,7 +11,6 @@
 #include <time.h>
 #include <signal.h>
 #include <vector>
-
 #define DEFAULT_PACKET_SIZE 56
 #define DEFAULT_TTL 64
 #define RECV_TIMEOUT 1
@@ -32,34 +31,12 @@ void print_vector(vector<string> v) {
     cout << "\n";
 }
 
-char* hostname_to_ip(string addr_host) 
-{
-    cout << "Resolving DNS..." << endl;
-    struct hostent *host_entity;
-
-    char host_cstr[addr_host.size()+1];
-    char *ip_address = (char*)malloc(NI_MAXHOST*sizeof(char));
-
-    strcpy(host_cstr, addr_host.c_str());
-    host_entity = gethostbyname(host_cstr); 
-
-    if (host_entity == NULL) {
-        cerr << "No IP address found." << endl;
-        return NULL;
-    }
-
-    /* Important Line */
-    strcpy(ip_address, inet_ntoa(*(struct in_addr *)host_entity->h_addr));
-    return ip_address;
-}
-
-
 void ping(int sock_fd, struct sockaddr_in *ping_addr, char *ping_ip) 
 {
     int ttl = DEFAULT_TTL;
     int seq = 0;
 
-    struct icmphdr icmp_hdr;
+    struct icmp icmp_hdr;
     struct sockaddr_in addr;
     struct timespec start_time, end_time;
     struct timeval tv_out;
@@ -158,17 +135,6 @@ int main(int argc, char ** argv)
     //print_vector(ipv6_addrs);
     //print_vector(ipv4_addrs);
 
-    /* Obtaining IP address using gethostname
-    char *ip_address;
-    ip_address = hostname_to_ip(input);
-
-    if (ip_address == NULL) {
-        cerr << "DNS lookup failed" << endl;
-        return 1;
-    }
-
-    wcout << ip_address << endl; */
-
     // ------------------ It's socket time!  ------------------------- //
 
     int packet_size = DEFAULT_PACKET_SIZE;
@@ -180,9 +146,10 @@ int main(int argc, char ** argv)
     strcpy(host_cstr, ipv4_addrs[0].c_str());
 
     //SOCK_DGRAM or SOCK_RAW?
-    int sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
+    int sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_ICMP);
     if (sockfd < 0) {
         cerr << "Error with socket" << endl;
+        cout << sockfd << endl;
         return 1;
     }
 

@@ -71,7 +71,7 @@ void ping(int sock_fd, struct sockaddr *sa_dest, char* ip_addr)
         printf("Error with setsockopt\n");
     }
 
-    
+    // Setting timeout
     if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO,
                     (const char*)&tv_out, sizeof(tv_out)))
     {
@@ -106,16 +106,6 @@ void ping(int sock_fd, struct sockaddr *sa_dest, char* ip_addr)
                 printf("Error with recvfrom\n");
                 return;
             }
-                
-            clock_gettime(CLOCK_MONOTONIC, &end_time);
-            double timeElapsed = ((double)(end_time.tv_nsec -  start_time.tv_nsec))/1000000.0;
-            rtt = (end_time.tv_sec-start_time.tv_sec) * 1000.0 + timeElapsed;
-            printf("%d %s %s:", 64, "bytes from", ip_addr); // Report bytes and IP address
-            printf("%s=%d", " icmp_seq", seq);                // Report icmp_seq
-            printf("%s=%d", " ttl", default_ttl);             // Report TTL
-            printf("%s %.3Lf %s\n", " rtt =", rtt, "ms"); // Report RTT
-            packets_recieved++;     //Increment packet recieved
-            seq ++;
         }
         else {
             icmp_hdr.icmp_type = ICMP_ECHO;
@@ -140,19 +130,20 @@ void ping(int sock_fd, struct sockaddr *sa_dest, char* ip_addr)
                 printf("Error with recvfrom\n");
                 return;
             }
-                
-            clock_gettime(CLOCK_MONOTONIC, &end_time);
-            double timeElapsed = ((double)(end_time.tv_nsec -  start_time.tv_nsec))/1000000.0;
-            rtt = (end_time.tv_sec-start_time.tv_sec) * 1000.0 + timeElapsed;
-            printf("%d %s %s:", 64, "bytes from", ip_addr); // Report bytes and IP address
-            printf("%s=%d", " icmp_seq", seq);                // Report icmp_seq
-            printf("%s=%d", " ttl", default_ttl);             // Report TTL
-            printf("%s %.3Lf %s\n", " rtt =", rtt, "ms"); // Report RTT
-            packets_recieved++;     //Increment packet recieved
-            seq ++;
         }
+
+        clock_gettime(CLOCK_MONOTONIC, &end_time);
+        double timeElapsed = ((double)(end_time.tv_nsec -  start_time.tv_nsec))/1000000.0;
+        rtt = (end_time.tv_sec-start_time.tv_sec) * 1000.0 + timeElapsed;
+        printf("%d %s %s:", 64, "bytes from", ip_addr); // Report bytes and IP address
+        printf("%s=%d", " icmp_seq", seq);                // Report icmp_seq
+        printf("%s=%d", " ttl", default_ttl);             // Report TTL
+        printf("%s %.3Lf %s\n", " rtt =", rtt, "ms"); // Report RTT
+        packets_recieved++;     //Increment packet recieved
+        seq ++;
     }
 
+    /* End of ping report statistics */
     printf("--- ping statistics ---\n");
     double packet_loss = 100.0 * ((seq - packets_recieved)/(seq));
     printf("%d packets transmitted, %d packets recieved, %.1f",
@@ -164,6 +155,7 @@ void ping(int sock_fd, struct sockaddr *sa_dest, char* ip_addr)
 
 int main(int argc, char ** argv) 
 {
+    /* TTL option */
     struct option long_options[] = {
         {"ttl", required_argument, NULL, TTL},
         {0, 0, 0, 0}
@@ -176,7 +168,6 @@ int main(int argc, char ** argv)
         switch (opt) {
             case TTL:
                 if (optarg) {
-                    printf("Successfully used ttl option.\n");
                     default_ttl = atoi(optarg);
                     ttl_flag = 1;
                 }
@@ -201,51 +192,41 @@ int main(int argc, char ** argv)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    char* node = argv[1];
+    char* host = argv[1];
     if (ttl_flag) {
-        node = argv[2];
+        host = argv[2];
     }
 
-    if ((status = getaddrinfo(node, NULL, &hints, &res)) != 0) {
-        printf("%s\n", node);
+    /* Create linked list of addrinfo using getaddrinfo and store in res*/
+    if ((status = getaddrinfo(host, NULL, &hints, &res)) != 0) {
+        printf("%s\n", host);
         printf("Error with getaddrinfo\n");
-        return 2;
+        return 1;
     }
 
     struct addrinfo *i;
     struct sockaddr_in sockaddr_dest_ipv4;
     struct sockaddr_in6 sockaddr_dest_ipv6;
     
-
-    //char ipstr[INET6_ADDRSTRLEN];
-   
+   /* Loop through linked list res and obtain sockaddr_in destinations for IPv4 and IPv6 */
     for (i= res;i != NULL; i= i->ai_next) {
-        void *addr;
-        char* ipver;
+
         if (i->ai_family == AF_INET) { // IPv4
             struct sockaddr_in *ipv4 = (struct sockaddr_in *)i->ai_addr;
-            addr = &(ipv4->sin_addr);
-            ipver = "IPv4";
             sockaddr_dest_ipv4 = *ipv4;
             ipv4_flag = 1;
         } else { // IPv6
             struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)i->ai_addr;
-            addr = &(ipv6->sin6_addr);
-            ipver = "IPv6";
             sockaddr_dest_ipv6 = *ipv6;
             ipv6_flag = 1;
         }
-        // Printing IP addresses 
-        //inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
-        //printf("  %s: %s\n", ipver, ipstr);
-
     }
 
-    // ------------------ It's socket time!  ------------------------- //
+    /* ------------------ Setting up socket ------------------------- */
 
     int sockfd;
     if (ipv4_flag == 0 && ipv6_flag == 1) {
-        sockfd = socket(PF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+        sockfd = socket(PF_INET6, SOCK_RAW, IPPROTO_ICMPV6); // Note, since we are using SOCK_RAW, need root privilege 
     }
     else {
         sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
@@ -258,6 +239,7 @@ int main(int argc, char ** argv)
     }
 
 
+    /* Printing IP_address */
     char ip_addr[INET6_ADDRSTRLEN];
     void *sa_sinaddr;
 
@@ -270,17 +252,19 @@ int main(int argc, char ** argv)
         inet_ntop(PF_INET, sa_sinaddr, ip_addr, sizeof ip_addr);
     }
     
-    printf("%s %s (%s): %d %s", "PING", node, ip_addr, DEFAULT_PACKET_SIZE, "data bytes\n");
+    printf("%s %s (%s): %d %s", "PING", host, ip_addr, DEFAULT_PACKET_SIZE, "data bytes\n");
 
+    /* Handle Interrupts to end pinging */
     signal(SIGINT, interrupt_handler);
 
+    /* Call ping with approriate sockaddr destination via IPv6 or IPv4 */
     if (ipv4_flag == 0 && ipv6_flag == 1) {
         ping(sockfd, (struct sockaddr*)&sockaddr_dest_ipv6, ip_addr);
     }
     else {
         ping(sockfd, (struct sockaddr*)&sockaddr_dest_ipv4, ip_addr);
     }
-    
+
     freeaddrinfo(res);
     return 0;
 }   
